@@ -66,6 +66,9 @@ public class MailConfiguration implements Serializable {
 
 	/* Whether automatically add the gallery macro if an attachment is an image */
 	private boolean gallerymacro;
+	
+	/* Whether sharing of blog articles is possible */
+	private boolean shareWithOthers;
 
 	/**
 	 * The constructor, fills out default (dummy) values.
@@ -282,5 +285,13 @@ public class MailConfiguration implements Serializable {
 	 * able to deserialize legacy settings. Will be removed in 2.0.
 	 */
 	public void setEmailaddress(String emailaddress) {
+	}
+
+	public boolean isShareWithOthers() {
+		return shareWithOthers;
+	}
+
+	public void setShareWithOthers(boolean shareWithOthers) {
+		this.shareWithOthers = shareWithOthers;
 	}
 }

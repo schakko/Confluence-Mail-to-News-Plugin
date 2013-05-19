@@ -82,6 +82,14 @@
 						</td>
 					</tr>
 					<tr>
+    					<td nowrap align="right"  valign="top"  >
+    						<label class="label" for="mailConfiguration.shareWithOthers">Enable sharing of new blog post with Share-With: header</label>
+    					</td>
+    					<td>
+							<input type="checkbox" name="mailConfiguration.shareWithOthers" id="mailConfiguration.shareWithOthers" value="true" #if ($mailConfiguration.shareWithOthers) checked="checked" #end/>
+						</td>
+					</tr>
+					<tr>
 						<td colspan="2" style="text-align: center">
 							#tag( Submit "name='confirm'" "value='update.name'" "theme='notable'" )
         				</td>

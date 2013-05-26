@@ -75,13 +75,14 @@ public class MailConfiguration implements Serializable {
 	 */
 	public MailConfiguration()
 	{
-		server = "mail.domain";
+		server = "localhost";
 		protocol = "IMAP";
 		port = 143;
-		username = "user@domain";
-		password = "password";
+		username = "wiki@localhost";
+		password = "wiki";
 		secure = false;
 		gallerymacro = false;
+		shareWithOthers = true;
 	}
 
 	/**

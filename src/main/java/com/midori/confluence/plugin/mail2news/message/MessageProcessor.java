@@ -11,8 +11,9 @@ public interface MessageProcessor {
 	 * 
 	 * @throws MessageProcessorException
 	 *             if any protocol exception occurs
+	 * @return true if further processing is allowed
 	 */
-	void preProcess() throws MessageProcessorException;
+	boolean preProcess() throws MessageProcessorException;
 
 	/**
 	 * Will be executed afther the blog post message is processed and can now be
@@ -28,6 +29,7 @@ public interface MessageProcessor {
 	 * protocol (moving to Trash, sending an error e-mail)
 	 * 
 	 * @param error
+	 * @param exception
 	 */
-	void fail(String error);
+	void fail(String error, Exception e);
 }

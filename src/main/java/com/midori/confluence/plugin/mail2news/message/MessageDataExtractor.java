@@ -10,9 +10,8 @@ import java.util.regex.Pattern;
 
 import javax.mail.Address;
 import javax.mail.Message;
+import javax.mail.Message.RecipientType;
 import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMessage.RecipientType;
 
 import org.apache.log4j.Logger;
 
@@ -137,10 +136,17 @@ public class MessageDataExtractor {
 		List<Address> allRecipients = new ArrayList<Address>();
 
 		try {
-			Collections.addAll(allRecipients,
-					message.getRecipients(RecipientType.TO));
-			Collections.addAll(allRecipients,
-					message.getRecipients(RecipientType.CC));
+			RecipientType[] types = new RecipientType[] { RecipientType.TO, RecipientType.CC };
+			Address[] recipients = null;
+			
+			for (RecipientType type : types)
+			{
+				recipients = message.getRecipients(type);
+				
+				if (null != recipients) {
+					Collections.addAll(allRecipients, recipients);
+				}
+			}
 		} catch (Exception e) {
 			log.error("Failed to extract recipients: " + e.getMessage());
 		}

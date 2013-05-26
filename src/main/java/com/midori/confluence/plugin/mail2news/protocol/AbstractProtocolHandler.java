@@ -13,6 +13,7 @@ import javax.mail.Store;
 import org.apache.log4j.Logger;
 
 import com.midori.confluence.plugin.mail2news.MailConfiguration;
+import com.sun.mail.imap.IMAPFolder;
 
 /**
  * Base class for IMAP(S) and POP3(S)
@@ -23,7 +24,7 @@ public abstract class AbstractProtocolHandler implements ProtocolHandler {
 	/**
 	 * The log to which we will be logging infos and errors.
 	 */
-	protected final Logger log = Logger.getLogger(this.getClass());
+	private final static Logger log = Logger.getLogger(AbstractProtocolHandler.class);
 
 	protected MailConfiguration configuration;
 

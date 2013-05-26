@@ -45,8 +45,6 @@ public class MailToBlogPostPublisher {
 	 */
 	private UserAccessor userAccessor;
 
-	private ConfigurationManager configurationManager;
-
 	private SharePageService sharePageService;
 
 	/**
@@ -55,21 +53,20 @@ public class MailToBlogPostPublisher {
 	private AttachmentManager attachmentManager;
 
 	public MailToBlogPostPublisher(Message message) {
-		ContainerManager.autowireComponent(this);
+		ContainerManager.autowireComponent(this);		
 		this.setMessage(message);
 		this.setExtractor(new MessageDataExtractor(message));
 	}
 
-	public void publish() throws ConverterException {
-		boolean shareWithOthers = true; // TODO Get from config
+	public void publish(MailConfiguration configuration) throws ConverterException {
 		Space spaceToPublish = getSpace();
 
 		User user = mapSenderOfMessageToLocalUser();
 
 		BlogPost post = publishMessageContentAsBlogPost(getExtractor(),
-				spaceToPublish, user);
+				spaceToPublish, user, configuration);
 
-		if (shareWithOthers) {
+		if (configuration.isShareWithOthers()) {
 			sharePost(post.getId(), getExtractor().getUsersForSharing());
 		}
 	}
@@ -81,12 +78,15 @@ public class MailToBlogPostPublisher {
 	 * @param users
 	 */
 	protected void sharePost(long id, List<String> users) {
+		log.info("Sharing blog post with id \"" + id + "\" with " + users.size() + " users");
+		AuthenticatedUserThreadLocal.setUser(null);
+		
 		ShareRequest request = new ShareRequest();
 		request.setEntityId(id);
 		request.setEmails(new HashSet<String>(users));
 		// TODO Does this work? sanitize usernames from e-mail address
 		request.setUsers(new HashSet<String>(users));
-		sharePageService.share(request);
+		getSharePageService().share(request);
 	}
 
 	/**
@@ -100,7 +100,7 @@ public class MailToBlogPostPublisher {
 	 * @return the recently created blog post
 	 */
 	protected BlogPost publishMessageContentAsBlogPost(
-			MessageDataExtractor extractor, Space space, User createdBy)
+			MessageDataExtractor extractor, Space space, User createdBy, MailConfiguration configuration)
 			throws ConverterException {
 		if (!extractor.getContent().isValid()) {
 			throw new ConverterException("E-Mail could not be parsed");
@@ -119,8 +119,7 @@ public class MailToBlogPostPublisher {
 		 * if the gallery macro is set and the post contains an image add the
 		 * macro
 		 */
-		MailConfiguration config = configurationManager.getMailConfiguration();
-		if (config.getGallerymacro()) {
+		if (configuration.getGallerymacro()) {
 			/* gallery macro is set */
 			if (extractor.getContent().containsImages()) {
 				content = content.concat("{gallery}");
@@ -169,7 +168,7 @@ public class MailToBlogPostPublisher {
 		AuthenticatedUserThreadLocal.setUser(createdBy);
 
 		/* save the blog post */
-		pageManager.saveContentEntity(blogPost, null);
+		getPageManager().saveContentEntity(blogPost, null);
 
 		/*
 		 * we have to save the blog post before we can add the attachments,
@@ -182,7 +181,7 @@ public class MailToBlogPostPublisher {
 			attachment.setCreatorName(creatorName);
 
 			try {
-				attachmentManager.saveAttachment(attachment, null, is);
+				getAttachmentManager().saveAttachment(attachment, null, is);
 
 				/* add the attachment to the blog post */
 				blogPost.addAttachment(attachment);
@@ -191,7 +190,9 @@ public class MailToBlogPostPublisher {
 						+ e.getMessage());
 			}
 		}
-
+		
+		log.info("Blog post \"" + title + "\" published in space " + space.getName());
+		
 		return blogPost;
 	}
 
@@ -211,11 +212,11 @@ public class MailToBlogPostPublisher {
 			log.debug("Checking if space key " + spaceCandidate
 					+ " is available");
 
-			space = spaceManager.getSpace(spaceCandidate);
+			space = getSpaceManager().getSpace(spaceCandidate);
 
 			if (space == null) {
 				// fall back to look up a personal space
-				space = spaceManager.getPersonalSpace(spaceCandidate);
+				space = getSpaceManager().getPersonalSpace(spaceCandidate);
 			}
 
 			if (space != null) {
@@ -233,8 +234,8 @@ public class MailToBlogPostPublisher {
 			String username = user.getName();
 			log.info("Fallback to personal space, using the personal space of '"
 					+ username + "' for publishing");
-			space = spaceManager.getPersonalSpace(username);
-			
+			space = getSpaceManager().getPersonalSpace(username);
+
 			if (null != space) {
 				log.info("Using personal space of user '" + username + "'");
 				return space;
@@ -257,7 +258,8 @@ public class MailToBlogPostPublisher {
 
 		for (String sender : getExtractor().getSenders()) {
 			@SuppressWarnings("unchecked")
-			SearchResult<User> results = userAccessor.getUsersByEmail(sender);
+			SearchResult<User> results = getUserAccessor().getUsersByEmail(
+					sender);
 			List<User> firstPage = results.pager().getCurrentPage();
 
 			if (firstPage.size() > 0) {
@@ -283,5 +285,45 @@ public class MailToBlogPostPublisher {
 
 	public void setExtractor(MessageDataExtractor extractor) {
 		this.extractor = extractor;
+	}
+
+	public SpaceManager getSpaceManager() {
+		return spaceManager;
+	}
+
+	public void setSpaceManager(SpaceManager spaceManager) {
+		this.spaceManager = spaceManager;
+	}
+
+	public PageManager getPageManager() {
+		return pageManager;
+	}
+
+	public void setPageManager(PageManager pageManager) {
+		this.pageManager = pageManager;
+	}
+
+	public UserAccessor getUserAccessor() {
+		return userAccessor;
+	}
+
+	public void setUserAccessor(UserAccessor userAccessor) {
+		this.userAccessor = userAccessor;
+	}
+
+	public SharePageService getSharePageService() {
+		return sharePageService;
+	}
+
+	public void setSharePageService(SharePageService sharePageService) {
+		this.sharePageService = sharePageService;
+	}
+
+	public AttachmentManager getAttachmentManager() {
+		return attachmentManager;
+	}
+
+	public void setAttachmentManager(AttachmentManager attachmentManager) {
+		this.attachmentManager = attachmentManager;
 	}
 }

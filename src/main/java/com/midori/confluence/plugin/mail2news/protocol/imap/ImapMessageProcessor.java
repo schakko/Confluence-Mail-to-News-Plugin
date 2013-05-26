@@ -1,5 +1,8 @@
 package com.midori.confluence.plugin.mail2news.protocol.imap;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
 import javax.mail.Flags;
 import javax.mail.Folder;
 import javax.mail.Message;
@@ -10,6 +13,7 @@ import org.apache.log4j.Logger;
 import com.midori.confluence.plugin.mail2news.MailUtil;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessor;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessorException;
+import com.midori.confluence.plugin.mail2news.protocol.imap.ImapProtocolHandler.FolderType;
 import com.midori.confluence.plugin.mail2news.protocol.imap.ImapProtocolHandler.ImapRootFolderStructure;
 
 public class ImapMessageProcessor implements MessageProcessor {
@@ -18,23 +22,29 @@ public class ImapMessageProcessor implements MessageProcessor {
 	protected ImapRootFolderStructure rootFolderStructure;
 	protected Message message;
 
-	public ImapMessageProcessor(Message message, ImapRootFolderStructure rootFolderStructure) {
+	public ImapMessageProcessor(Message message,
+			ImapRootFolderStructure rootFolderStructure) {
 		this.message = message;
 		this.rootFolderStructure = rootFolderStructure;
 	}
 
-	public void preProcess() throws MessageProcessorException {
+	public boolean preProcess() throws MessageProcessorException {
 		try {
 			boolean isSet = message.isSet(Flags.Flag.SEEN);
 
 			if (isSet) {
-				throw new MessageProcessorException(
-						"This message has already been flagged as seen before being handled and was thus ignored.");
+				log.error("Message \"" + message.getSubject() + "\" has already been flagged as seen before. Moving to processed");
+				moveMessage(message,
+						rootFolderStructure.getFolder(FolderType.DEFAULT),
+						rootFolderStructure.getFolder(FolderType.PROCESSED));
+				return false;
 			}
 		} catch (Exception e) {
 			throw new MessageProcessorException("Failed to check SEEN status: "
 					+ e.getMessage(), e);
 		}
+
+		return true;
 	}
 
 	/**
@@ -50,7 +60,21 @@ public class ImapMessageProcessor implements MessageProcessor {
 	 *            The folder to where to move the message.
 	 */
 	private void moveMessage(Message m, Folder from, Folder to) {
+		if (null == m || null == from || null == to) {
+			log.fatal("Failed to moveMessage, one or more parameters are null (message: "
+					+ m + ", folder.from: " + from + ", folder.to: " + to);
+			return;
+		}
+
 		try {
+			if (!from.isOpen()) {
+				from.open(Folder.READ_WRITE);
+			}
+
+			if (!to.isOpen()) {
+				to.open(Folder.READ_WRITE);
+			}
+
 			/* copy the message to the destination folder */
 			from.copyMessages(new Message[] { m }, to);
 			/* delete the message from the originating folder */
@@ -76,23 +100,31 @@ public class ImapMessageProcessor implements MessageProcessor {
 
 	public void postProcess() throws MessageProcessorException {
 		/* move the message to the processed folder */
-		moveMessage(message, rootFolderStructure.folderInbox,
-				rootFolderStructure.folderProcessed);
+		moveMessage(message, rootFolderStructure.getFolder(FolderType.DEFAULT),
+				rootFolderStructure.getFolder(FolderType.PROCESSED));
 	}
 
-	public void fail(String failMessage) {
+	public void fail(String failMessage, Exception ex) {
 		/* this message has been seen, should not happen */
 		/* send email to the sender */
 		try {
+			log.error("Current message failed :" + failMessage);
+
+			if (null != ex) {
+				StringWriter sw = new StringWriter();
+				PrintWriter pw = new PrintWriter(sw);
+				ex.printStackTrace(pw);
+				log.error("\nStacktrace:\n" + sw.toString());
+			}
+
 			MailUtil.sendErrorMessage(message, failMessage);
 		} catch (Exception e) {
-			log.error("Failed to send error message: " + e.getMessage()
-					+ "; original message was: " + failMessage);
+			log.error("Failed to send error message: " + e.getMessage());
 		}
 
 		/* move this message to the invalid folder */
-		moveMessage(message, rootFolderStructure.folderInbox,
-				rootFolderStructure.folderInvalid);
+		moveMessage(message, rootFolderStructure.getFolder(FolderType.DEFAULT),
+				rootFolderStructure.getFolder(FolderType.INVALID));
 		/* skip this message */
 	}
 }

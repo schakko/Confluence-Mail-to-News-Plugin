@@ -17,23 +17,28 @@ import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandlerException;
 
 public class ImapProtocolHandler extends AbstractProtocolHandler implements
 		ProtocolHandler {
-	public class ImapRootFolderStructure
-	{
-		Folder folderDefault = null;
-		Folder folderProcessed = null;
-		Folder folderInvalid = null;
-		Folder folderInbox = null;
+	public enum FolderType {
+		DEFAULT, PROCESSED, INVALID
 	}
 
-	protected final Logger log = Logger.getLogger(this.getClass());
+	public class ImapRootFolderStructure {
+		Map<FolderType, Folder> folders = new HashMap<FolderType, Folder>();
+
+		public Folder getFolder(FolderType type) {
+			return folders.get(type);
+		}
+	}
+
+	private final static Logger log = Logger
+			.getLogger(ImapProtocolHandler.class);
 
 	protected ImapRootFolderStructure imapRootFolderStructure;
-	
+
 	public ImapProtocolHandler(MailConfiguration configuration) {
 		super(configuration);
 		imapRootFolderStructure = new ImapRootFolderStructure();
 	}
-	
+
 	@Override
 	public void connect() throws ProtocolHandlerException {
 		super.connect();
@@ -43,14 +48,15 @@ public class ImapProtocolHandler extends AbstractProtocolHandler implements
 		 * invalid folder.
 		 */
 		try {
-			imapRootFolderStructure.folderDefault = store.getDefaultFolder();
+			imapRootFolderStructure.folders.put(FolderType.DEFAULT,
+					store.getDefaultFolder());
 		} catch (MessagingException me) {
 			throw new ProtocolHandlerException("Could not get default folder: "
 					+ me.getMessage(), me);
 		}
 		/* sanity check */
 		try {
-			if (!imapRootFolderStructure.folderDefault.exists()) {
+			if (!imapRootFolderStructure.getFolder(FolderType.DEFAULT).exists()) {
 				throw new ProtocolHandlerException(
 						"Default folder does not exist. Cannot continue. This might indicate that this software does not like the given IMAP server. If you think you know what the problem is contact the author.");
 			}
@@ -68,12 +74,16 @@ public class ImapProtocolHandler extends AbstractProtocolHandler implements
 		 * look for the "INBOX" folder, which has to exist and then create the
 		 * subfolders under this folder.
 		 */
-		if (imapRootFolderStructure.folderDefault.getName().equals("")) {
-			this.log.warn("Default folder has empty name. Looking for 'INBOX' folder as root folder.");
-			try {
+		if (imapRootFolderStructure.getFolder(FolderType.DEFAULT).getName()
+				.equals("")) {
+			log.warn("Default folder has empty name. Looking for 'INBOX' folder as root folder.");
 
-				imapRootFolderStructure.folderDefault = store.getFolder("INBOX");
-				if (!imapRootFolderStructure.folderDefault.exists()) {
+			try {
+				imapRootFolderStructure.folders.put(FolderType.DEFAULT,
+						store.getFolder("INBOX"));
+
+				if (!imapRootFolderStructure.getFolder(FolderType.DEFAULT)
+						.exists()) {
 					throw new ProtocolHandlerException(
 							"Could not find default folder and could not find 'INBOX' folder. Cannot continue. This might indicate that this software does not like the given IMAP server. If you think you know what the problem is contact the author.");
 				}
@@ -84,24 +94,37 @@ public class ImapProtocolHandler extends AbstractProtocolHandler implements
 			}
 		}
 
+		try {
+			imapRootFolderStructure.getFolder(FolderType.DEFAULT).open(
+					Folder.READ_WRITE);
+		} catch (Exception e) {
+			throw new ProtocolHandlerException(
+					"Failed to open INBOX for read/write: " + e.getMessage(), e);
+		}
+
 		/***
 		 * Open the folder for processed messages
 		 ***/
-		Map<String, Folder> folders = new HashMap<String, Folder>();
-		folders.put("Processed", imapRootFolderStructure.folderProcessed);
-		folders.put("Invalid", imapRootFolderStructure.folderInvalid);
+		FolderType[] typesToResolve = new FolderType[] { FolderType.PROCESSED,
+				FolderType.INVALID };
 
-		Folder folderReference = null;
+		for (FolderType folderType : typesToResolve) {
+			String folderName = folderType.toString();
+			Folder folderReference = null;
 
-		for (String folderName : folders.keySet()) {
-			folderReference = folders.get(folderName);
+			log.error("Initializing folder [" + folderName + "]");
 
 			try {
-				folderReference = imapRootFolderStructure.folderDefault.getFolder(folderName);
-				
+				folderReference = store.getFolder(folderName);
+
 				if (!folderReference.exists()) {
+					log.info("Folder " + folderName
+							+ " does not exists, creating...");
+
 					/* does not exist, create it */
 					if (!folderReference.create(Folder.HOLDS_MESSAGES)) {
+						log.error("Failed to create folder '" + folderName
+								+ "'");
 						throw new ProtocolHandlerException("Creating '"
 								+ folderName + "' folder failed.");
 					}
@@ -112,12 +135,29 @@ public class ImapProtocolHandler extends AbstractProtocolHandler implements
 				 * messages we already handled to this folder
 				 */
 				folderReference.open(Folder.READ_WRITE);
+				imapRootFolderStructure.folders
+						.put(folderType, folderReference);
 			} catch (Exception e) {
 				throw new ProtocolHandlerException(
 						"Failed to initialize folder '" + folderName + "': "
 								+ e.getMessage(), e);
 			}
 		}
+	}
+
+	public void close() throws ProtocolHandlerException {
+		// expunge/delete all existing messages on close
+		for (FolderType f : imapRootFolderStructure.folders.keySet()) {
+			try {
+				Folder folder = imapRootFolderStructure.getFolder(f);
+				folder.close(true);
+			} catch (Exception e) {
+				log.error("Failed to close folder " + f.toString() + ": "
+						+ e.getMessage());
+			}
+		}
+
+		super.close();
 	}
 
 	public MessageProcessor createMessageProcessor(Message message) {

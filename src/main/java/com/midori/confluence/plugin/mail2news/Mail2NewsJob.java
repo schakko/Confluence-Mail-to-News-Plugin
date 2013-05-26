@@ -47,7 +47,9 @@ import org.apache.log4j.Logger;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
+import com.atlassian.confluence.plugins.sharepage.api.SharePageService;
 import com.atlassian.quartz.jobs.AbstractJob;
+import com.atlassian.sal.api.component.ComponentLocator;
 import com.atlassian.spring.container.ContainerManager;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessor;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandler;
@@ -67,11 +69,16 @@ public class Mail2NewsJob extends AbstractJob {
 	 */
 	private ConfigurationManager configurationManager;
 
+	private SharePageService sharePageService;
+
 	/**
 	 * The default constructor. Autowires this component and creates a new
 	 * configuration manager.
 	 */
-	public Mail2NewsJob() {
+	public Mail2NewsJob(SharePageService sharePageService) {
+		// bind manually b/c of OSGi plug-in
+		this.sharePageService = sharePageService;
+
 		/*
 		 * autowire this component (this means that the space and page manager
 		 * are automatically set by confluence
@@ -91,6 +98,10 @@ public class Mail2NewsJob extends AbstractJob {
 	 */
 	public void doExecute(JobExecutionContext arg0)
 			throws JobExecutionException {
+
+		if (null == this.getSharePageService()) {
+			throw new JobExecutionException("SharePageService was not bound");
+		}
 
 		/* The mailstore object used to connect to the server */
 		ProtocolHandler protocolHandler = null;
@@ -118,18 +129,27 @@ public class Mail2NewsJob extends AbstractJob {
 				messageProcessor = protocolHandler
 						.createMessageProcessor(message);
 				try {
-					messageProcessor.preProcess();
+					if (!messageProcessor.preProcess()) {
+						// processing failed, check next message
+						continue;
+					}
 
 					MailToBlogPostPublisher publisher = new MailToBlogPostPublisher(
 							message);
+					// OSGi, Autowiring does not work
+					publisher.setSharePageService(getSharePageService());
 
-					publisher.publish();
+					publisher.publish(config);
 
 					messageProcessor.postProcess();
 				} catch (Exception e) {
-					messageProcessor.fail(e.getMessage());
+					messageProcessor.fail(e.getMessage(), e);
 				}
 			}
+
+			log.info("Closing mail inbox connection");
+			protocolHandler.close();
+
 		} catch (Exception e) {
 			/* catch any exception which was not handled so far */
 			log.error("Error while executing mail2news job: " + e.getMessage(),
@@ -138,12 +158,14 @@ public class Mail2NewsJob extends AbstractJob {
 					"Error while executing mail2news job: " + e.getMessage(),
 					e, false);
 			throw jee;
-		} finally {
-			/* try to do some cleanup */
-			try {
-				protocolHandler.close();
-			} catch (Exception e) {
-			}
 		}
+	}
+
+	public SharePageService getSharePageService() {
+		return sharePageService;
+	}
+
+	public void setSharePageService(SharePageService sharePageService) {
+		this.sharePageService = sharePageService;
 	}
 }

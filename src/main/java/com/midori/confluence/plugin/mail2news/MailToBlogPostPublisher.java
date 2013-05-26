@@ -21,6 +21,7 @@ import com.atlassian.confluence.spaces.SpaceManager;
 import com.atlassian.confluence.user.AuthenticatedUserThreadLocal;
 import com.atlassian.confluence.user.UserAccessor;
 import com.atlassian.confluence.util.GeneralUtil;
+import com.atlassian.core.filters.ServletContextThreadLocal;
 import com.atlassian.spring.container.ContainerManager;
 import com.atlassian.user.User;
 import com.atlassian.user.search.SearchResult;
@@ -53,21 +54,22 @@ public class MailToBlogPostPublisher {
 	private AttachmentManager attachmentManager;
 
 	public MailToBlogPostPublisher(Message message) {
-		ContainerManager.autowireComponent(this);		
+		ContainerManager.autowireComponent(this);
 		this.setMessage(message);
 		this.setExtractor(new MessageDataExtractor(message));
 	}
 
-	public void publish(MailConfiguration configuration) throws ConverterException {
+	public void publish(MailConfiguration configuration)
+			throws ConverterException {
 		Space spaceToPublish = getSpace();
 
-		User user = mapSenderOfMessageToLocalUser();
+		User user = mapSenderOfMessageToLocalUser(getExtractor().getSenders());
 
 		BlogPost post = publishMessageContentAsBlogPost(getExtractor(),
 				spaceToPublish, user, configuration);
 
 		if (configuration.isShareWithOthers()) {
-			sharePost(post.getId(), getExtractor().getUsersForSharing());
+			sharePost(post.getId(), user, getExtractor().getUsersForSharing());
 		}
 	}
 
@@ -75,18 +77,42 @@ public class MailToBlogPostPublisher {
 	 * Shares the post with the given id with users
 	 * 
 	 * @param id
+	 * @param sender
 	 * @param users
 	 */
-	protected void sharePost(long id, List<String> users) {
-		log.info("Sharing blog post with id \"" + id + "\" with " + users.size() + " users");
-		AuthenticatedUserThreadLocal.setUser(null);
+	protected void sharePost(long id, User sender, List<String> usernamesOrEmailAddresses) {
+		HashSet<String> users = new HashSet<String>();
+		User u = null;
 		
+		if (null == sender) {
+			log.error("Not sharing post, could not identify the user which sends this blog post");
+			return;
+		}
+		
+		for (String usernameOrEmailAddress : usernamesOrEmailAddresses) {
+			u = resolveUserFromAddress(usernameOrEmailAddress);
+			
+			if (null != u) {
+				users.add(u.getName());
+			}
+		}
+		
+		AuthenticatedUserThreadLocal.setUser(sender);
+
 		ShareRequest request = new ShareRequest();
 		request.setEntityId(id);
-		request.setEmails(new HashSet<String>(users));
-		// TODO Does this work? sanitize usernames from e-mail address
-		request.setUsers(new HashSet<String>(users));
-		getSharePageService().share(request);
+		request.setUsers(users);
+		// null values not allowed
+		request.setEmails(new HashSet<String>());
+
+		// using setRequest() is the only possibility to make this plug-in working. Hopfully, Atlassian won't remove the API method.
+		ServletContextThreadLocal.setRequest(new MockHttpServletRequest());
+
+		try {
+			getSharePageService().share(request);
+		} catch (Exception e) {
+			log.error("Failed to share page: " + e.getMessage());
+		}
 	}
 
 	/**
@@ -100,12 +126,12 @@ public class MailToBlogPostPublisher {
 	 * @return the recently created blog post
 	 */
 	protected BlogPost publishMessageContentAsBlogPost(
-			MessageDataExtractor extractor, Space space, User createdBy, MailConfiguration configuration)
-			throws ConverterException {
+			MessageDataExtractor extractor, Space space, User createdBy,
+			MailConfiguration configuration) throws ConverterException {
 		if (!extractor.getContent().isValid()) {
 			throw new ConverterException("E-Mail could not be parsed");
 		}
-
+		
 		/* create the blogPost and add values */
 		BlogPost blogPost = new BlogPost();
 		/* set the creation date of the blog post to the current date */
@@ -190,9 +216,10 @@ public class MailToBlogPostPublisher {
 						+ e.getMessage());
 			}
 		}
-		
-		log.info("Blog post \"" + title + "\" published in space " + space.getName());
-		
+
+		log.info("Blog post \"" + title + "\" published in space "
+				+ space.getName());
+
 		return blogPost;
 	}
 
@@ -228,7 +255,7 @@ public class MailToBlogPostPublisher {
 
 		// fallback to personal spaces. The personal space is identified by the
 		// the sender addresses
-		User user = mapSenderOfMessageToLocalUser();
+		User user = mapSenderOfMessageToLocalUser(getExtractor().getSenders());
 
 		if (null != user) {
 			String username = user.getName();
@@ -253,22 +280,70 @@ public class MailToBlogPostPublisher {
 	 * 
 	 * @return
 	 */
-	public User mapSenderOfMessageToLocalUser() {
+	public User mapSenderOfMessageToLocalUser(List<String> senders) {
 		User r = null;
 
-		for (String sender : getExtractor().getSenders()) {
-			@SuppressWarnings("unchecked")
-			SearchResult<User> results = getUserAccessor().getUsersByEmail(
-					sender);
-			List<User> firstPage = results.pager().getCurrentPage();
+		for (String sender : senders) {
+			r = resolveUserFromAddress(sender);
 
-			if (firstPage.size() > 0) {
-				r = firstPage.get(0);
+			if (null != r) {
 				break;
 			}
 		}
 
+		if (null != r) {
+			log.debug("Sender of mail resolved to " + r.getFullName());
+		} else {
+			log.error("Could not resolve sender of E-mail");
+		}
+
 		return r;
+	}
+
+	/**
+	 * Resolves an e-mail address to a local user instance. Detects:
+	 * <ul>
+	 * <li>"admin <admin@localhost>" -&gt; admin</li>
+	 * <li>"admin@localhost" -&gt; admin</li>
+	 * <li>"admin" -&gt; admin</li>
+	 * </ul>
+	 * 
+	 * @param given
+	 *            format
+	 * @return
+	 */
+	public User resolveUserFromAddress(String usernamesOrEmail) {
+		String extractedEmailAddress = usernamesOrEmail;
+
+		if ((extractedEmailAddress.lastIndexOf("<") > 0)
+				&& (extractedEmailAddress.lastIndexOf(">") > 0)) {
+			extractedEmailAddress = usernamesOrEmail.substring(
+					usernamesOrEmail.lastIndexOf("<") + 1,
+					usernamesOrEmail.lastIndexOf(">"));
+		}
+
+		@SuppressWarnings("unchecked")
+		SearchResult<User> results = getUserAccessor().getUsersByEmail(
+				extractedEmailAddress);
+		List<User> firstPage = results.pager().getCurrentPage();
+
+		if (firstPage.size() > 0) {
+			return firstPage.get(0);
+		}
+
+		// fallback to username search
+		extractedEmailAddress = extractedEmailAddress.substring(0,
+				extractedEmailAddress.indexOf("@"));
+
+		if (extractedEmailAddress.length() > 0) {
+			User r = getUserAccessor().getUser(extractedEmailAddress);
+
+			if (null != r) {
+				return r;
+			}
+		}
+
+		return null;
 	}
 
 	public Message getMessage() {

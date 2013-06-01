@@ -12,8 +12,7 @@ import javax.mail.Store;
 
 import org.apache.log4j.Logger;
 
-import com.midori.confluence.plugin.mail2news.MailConfiguration;
-import com.sun.mail.imap.IMAPFolder;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 
 /**
  * Base class for IMAP(S) and POP3(S)

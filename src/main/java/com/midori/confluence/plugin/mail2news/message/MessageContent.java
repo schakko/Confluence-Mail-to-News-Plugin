@@ -27,7 +27,7 @@ public class MessageContent {
 	/**
 	 * The content of a message, this will be the content of the news entry
 	 */
-	private String content = "";
+	private String content = null;
 
 	/**
 	 * A flag indicating whether the current post contains an image
@@ -105,10 +105,10 @@ public class MessageContent {
 	/**
 	 * Returns the textutal representation of the message body
 	 * 
-	 * @return
+	 * @return always a string. The string is trimmed.
 	 */
 	public String getText() {
-		return content;
+		return (content == null) ? "" : content.trim();
 	}
 
 	/**
@@ -143,24 +143,22 @@ public class MessageContent {
 	 */
 	private void handlePart(Part part) throws MessagingException, IOException {
 		/* get the content type of this part */
-		String contentType = part.getContentType();
+		String contentType = part.getContentType().toLowerCase();
 
 		if (part.getContent() instanceof Multipart) {
 			handleMultipart((Multipart) part.getContent());
 			return;
 		}
 
-		log.debug("Content-Type: " + contentType);
-
-		/* check if the content is printable */
-		if (contentType.toLowerCase().startsWith("text/plain")
-				&& content == null) {
+		if ((contentType.startsWith("text/plain") || contentType
+				.startsWith("text/html")) && content == null) {
 			/* get the charset */
 			Charset charset = getCharsetFromHeader(contentType);
 			/* set the blog entry content to this content */
 			content = "";
 			InputStream is = part.getInputStream();
 			BufferedReader br = null;
+
 			if (charset != null) {
 				br = new BufferedReader(new InputStreamReader(is, charset));
 			} else {
@@ -183,7 +181,7 @@ public class MessageContent {
 
 				/* no filename, ignore this part */
 				if (fileName == null) {
-					this.log.warn("Attachment with no filename. Ignoring.");
+					log.warn("Attachment with no filename. Ignoring.");
 					return;
 				}
 
@@ -229,8 +227,7 @@ public class MessageContent {
 					// this.log.info("Attachment size: " +
 					// attachment.length);
 				} catch (Exception e) {
-					this.log.error(
-							"Could not load attachment:" + e.getMessage(), e);
+					log.error("Could not load attachment:" + e.getMessage(), e);
 					/* skip this attachment */
 					throw e;
 				}
@@ -247,8 +244,7 @@ public class MessageContent {
 				 */
 				attachments.put(a, bais);
 			} catch (Exception e) {
-				this.log.error(
-						"Error while saving attachment: " + e.getMessage(), e);
+				log.error("Error while saving attachment: " + e.getMessage(), e);
 			}
 		}
 	}

@@ -12,9 +12,9 @@
     </component-import>
     
 	<job key="mail2news-plugin" name="Mail to News Job"
-		class="com.midori.confluence.plugin.mail2news.Mail2NewsJob">
+		class="com.midori.confluence.plugin.mail2news.job.Mail2NewsJob">
 		<description>Retrieves mail from a specified account and adds them as
-			news to a space.
+			blog post to a space.
 		</description>
 	</job>
 
@@ -26,11 +26,13 @@
 			canDisable="true" />
 	</trigger>
 
+	<!-- append the configuration dialogue to the administration menu -->
 	<web-item key="mail2news" name="Mail2News" weight="100"
 		section="system.admin/configuration">
 		<label>Mail2News</label>
 		<link>/admin/plugins/mail2news/editmailconfiguration.action</link>
 	</web-item>
+	
 	<xwork name="Configure Mail Action" key="mailconfigurationactions">
 		<description>Actions for editing the mail configuration for the Mail
 			to News Plugin.
@@ -40,19 +42,19 @@
 			<default-interceptor-ref name="defaultStack" />
 
 			<action name="editmailconfiguration"
-				class="com.midori.confluence.plugin.mail2news.actions.ConfigurationAction"
+				class="com.midori.confluence.plugin.mail2news.action.ConfigurationAction"
 				method="doDefault">
 				<result name="input" type="velocity">/templates/extra/mail2news/editmailconfiguration.vm</result>
 			</action>
 
 			<action name="doeditmailconfiguration"
-				class="com.midori.confluence.plugin.mail2news.actions.ConfigurationAction">
+				class="com.midori.confluence.plugin.mail2news.action.ConfigurationAction">
 				<result name="input" type="velocity">/templates/extra/mail2news/editmailconfiguration.vm</result>
 				<result name="success" type="velocity">/templates/extra/mail2news/mailconfigurationsaved.vm</result>
 			</action>
 
 			<action name="testmailconfiguration"
-				class="com.midori.confluence.plugin.mail2news.actions.ConfigurationAction"
+				class="com.midori.confluence.plugin.mail2news.action.ConfigurationAction"
 				method="testConfiguration">
 				<result name="success" type="velocity">/templates/extra/mail2news/testmailconfiguration.vm</result>
 			</action>

@@ -1,4 +1,4 @@
-package com.midori.confluence.plugin.mail2news.message;
+package com.midori.confluence.plugin.mail2news;
 
 import junit.framework.TestCase;
 
@@ -12,7 +12,7 @@ public class MailToBlogPostPublisherTest extends TestCase {
 	}
 	
 	@Test
-	public void squareBracketsInSubjectCanBeUsedAsSpaceKey() throws Exception
+	public void mailAdd() throws Exception
 	{
 		String s = "admin <admin@localhost>";
 		String r = "";

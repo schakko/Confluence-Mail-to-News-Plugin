@@ -38,12 +38,13 @@
  * @package  com.midori.confluence.plugin.mail2news.mail2news
  */
 
-package com.midori.confluence.plugin.mail2news;
+package com.midori.confluence.plugin.mail2news.config;
 
 import java.io.Serializable;
 
 @com.atlassian.xwork.ParameterSafe
 public class MailConfiguration implements Serializable {
+	private static final long serialVersionUID = 6189051347410148966L;
 
 	/* The mail server */
 	private String server;

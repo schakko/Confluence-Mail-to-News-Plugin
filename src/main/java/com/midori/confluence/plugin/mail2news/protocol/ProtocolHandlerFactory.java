@@ -1,6 +1,6 @@
 package com.midori.confluence.plugin.mail2news.protocol;
 
-import com.midori.confluence.plugin.mail2news.MailConfiguration;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 import com.midori.confluence.plugin.mail2news.protocol.imap.ImapProtocolHandler;
 import com.midori.confluence.plugin.mail2news.protocol.pop3.Pop3ProtocolHandler;
 

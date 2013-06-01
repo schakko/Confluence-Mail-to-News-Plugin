@@ -16,6 +16,7 @@ import com.atlassian.confluence.pages.BlogPost;
 import com.atlassian.confluence.pages.PageManager;
 import com.atlassian.confluence.plugins.sharepage.api.SharePageService;
 import com.atlassian.confluence.plugins.sharepage.api.ShareRequest;
+import com.atlassian.confluence.security.PermissionManager;
 import com.atlassian.confluence.spaces.Space;
 import com.atlassian.confluence.spaces.SpaceManager;
 import com.atlassian.confluence.user.AuthenticatedUserThreadLocal;
@@ -25,7 +26,9 @@ import com.atlassian.core.filters.ServletContextThreadLocal;
 import com.atlassian.spring.container.ContainerManager;
 import com.atlassian.user.User;
 import com.atlassian.user.search.SearchResult;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 import com.midori.confluence.plugin.mail2news.message.MessageDataExtractor;
+import com.midori.confluence.plugin.mail2news.util.MockHttpServletRequest;
 
 public class MailToBlogPostPublisher {
 	protected final static Logger log = Logger
@@ -48,6 +51,8 @@ public class MailToBlogPostPublisher {
 
 	private SharePageService sharePageService;
 
+	private PermissionManager permissionManager;
+
 	/**
 	 * The attachment manager of this Confluence instance
 	 */
@@ -60,10 +65,10 @@ public class MailToBlogPostPublisher {
 	}
 
 	public void publish(MailConfiguration configuration)
-			throws ConverterException {
-		Space spaceToPublish = getSpace();
-
+			throws MailToBlogPostException {
 		User user = mapSenderOfMessageToLocalUser(getExtractor().getSenders());
+
+		Space spaceToPublish = getSpace(user);
 
 		BlogPost post = publishMessageContentAsBlogPost(getExtractor(),
 				spaceToPublish, user, configuration);
@@ -78,25 +83,38 @@ public class MailToBlogPostPublisher {
 	 * 
 	 * @param id
 	 * @param sender
+	 *            null value is not allowed
 	 * @param users
+	 * @throws MailToBlogPostException
+	 *             if space could not be determined
+	 * @throws IllegalArgumentException
+	 *             if user is null
 	 */
-	protected void sharePost(long id, User sender, List<String> usernamesOrEmailAddresses) {
+	@SuppressWarnings("deprecation")
+	protected void sharePost(long id, User sender,
+			List<String> usernamesOrEmailAddresses) {
 		HashSet<String> users = new HashSet<String>();
 		User u = null;
-		
+
 		if (null == sender) {
-			log.error("Not sharing post, could not identify the user which sends this blog post");
+			throw new IllegalArgumentException(
+					"Sender parameter is null, unable to share post without sender");
+		}
+
+		if ((usernamesOrEmailAddresses == null)
+				|| (usernamesOrEmailAddresses.size() == 0)) {
+			log.info("Not sharing post with anyone; no usernames or e-mail addresses specified");
 			return;
 		}
-		
+
 		for (String usernameOrEmailAddress : usernamesOrEmailAddresses) {
 			u = resolveUserFromAddress(usernameOrEmailAddress);
-			
+
 			if (null != u) {
 				users.add(u.getName());
 			}
 		}
-		
+
 		AuthenticatedUserThreadLocal.setUser(sender);
 
 		ShareRequest request = new ShareRequest();
@@ -105,13 +123,15 @@ public class MailToBlogPostPublisher {
 		// null values not allowed
 		request.setEmails(new HashSet<String>());
 
-		// using setRequest() is the only possibility to make this plug-in working. Hopfully, Atlassian won't remove the API method.
+		// using setRequest() is the only possibility to make this plug-in
+		// working. Hopefully, Atlassian won't remove the API method.
 		ServletContextThreadLocal.setRequest(new MockHttpServletRequest());
 
 		try {
 			getSharePageService().share(request);
 		} catch (Exception e) {
-			log.error("Failed to share page: " + e.getMessage());
+			e.printStackTrace();
+			log.error("Failed to share page (no SMTP server configured?): " + e.getMessage());
 		}
 	}
 
@@ -121,25 +141,21 @@ public class MailToBlogPostPublisher {
 	 * @param extractor
 	 * @param space
 	 * @param createdBy
-	 * @throws ConverterException
+	 * @throws MailToBlogPostException
 	 *             If the referenced e-mail could not be parsed
 	 * @return the recently created blog post
 	 */
 	protected BlogPost publishMessageContentAsBlogPost(
 			MessageDataExtractor extractor, Space space, User createdBy,
-			MailConfiguration configuration) throws ConverterException {
+			MailConfiguration configuration) throws MailToBlogPostException {
 		if (!extractor.getContent().isValid()) {
-			throw new ConverterException("E-Mail could not be parsed");
+			throw new MailToBlogPostException("E-Mail could not be parsed");
 		}
-		
+
 		/* create the blogPost and add values */
 		BlogPost blogPost = new BlogPost();
-		/* set the creation date of the blog post to the current date */
-		blogPost.setCreationDate(new Date());
-		/* set the space where to save the blog post */
-		blogPost.setSpace(space);
 
-		String content = extractor.getContent().getText();
+		String content = extractor.getBodyInStorageFormat();
 
 		/*
 		 * if the gallery macro is set and the post contains an image add the
@@ -150,13 +166,6 @@ public class MailToBlogPostPublisher {
 			if (extractor.getContent().containsImages()) {
 				content = content.concat("{gallery}");
 			}
-		}
-
-		/* set the blog post content */
-		if (content != null) {
-			blogPost.setBodyAsString(content);
-		} else {
-			blogPost.setBodyAsString("");
 		}
 
 		/* set the title of the blog post */
@@ -182,15 +191,18 @@ public class MailToBlogPostPublisher {
 			}
 		}
 
-		blogPost.setTitle(title);
-
 		String creatorName = "Anonymous";
 
 		if (null != createdBy) {
 			creatorName = createdBy.getName();
 		}
 
+		blogPost.setCreationDate(new Date());
+		blogPost.setSpace(space);
 		blogPost.setCreatorName(creatorName);
+		blogPost.setTitle(title);
+		blogPost.setBodyAsString(content);
+
 		AuthenticatedUserThreadLocal.setUser(createdBy);
 
 		/* save the blog post */
@@ -225,12 +237,23 @@ public class MailToBlogPostPublisher {
 
 	/**
 	 * Checks the detected spaces from the message and tries to resolve the
-	 * space keys to a local space instance.
+	 * space keys to a local space instance. Every space will be checked for the
+	 * create permission of the user.
 	 * 
+	 * @param user
+	 *            null value is not allowed
 	 * @return
-	 * @throws ConverterException
+	 * @throws MailToBlogPostException
+	 *             if space could not be determined
+	 * @throws IllegalArgumentException
+	 *             if user is null
 	 */
-	protected Space getSpace() throws ConverterException {
+	protected Space getSpace(User user) throws MailToBlogPostException {
+		if (user == null) {
+			throw new IllegalArgumentException(
+					"User parameter is null, unable to detect space");
+		}
+
 		List<String> spaces = getExtractor().getSpaceNames();
 		Space space = null;
 
@@ -244,32 +267,38 @@ public class MailToBlogPostPublisher {
 			if (space == null) {
 				// fall back to look up a personal space
 				space = getSpaceManager().getPersonalSpace(spaceCandidate);
+
+				// check permission
+				if (!permissionManager.hasCreatePermission(user,
+						spaceCandidate, BlogPost.class)) {
+					log.error("User " + user
+							+ " has no permission to create blog post in "
+							+ space);
+					space = null;
+				}
 			}
 
 			if (space != null) {
-				log.info("Space " + spaceCandidate
-						+ " is valid; using this for publishing");
+				log.info("Space "
+						+ spaceCandidate
+						+ " is valid and user has permission; using this for publishing");
 				return space;
 			}
 		}
 
 		// fallback to personal spaces. The personal space is identified by the
 		// the sender addresses
-		User user = mapSenderOfMessageToLocalUser(getExtractor().getSenders());
+		String username = user.getName();
+		log.info("Fallback to personal space, using the personal space of '"
+				+ username + "' for publishing");
+		space = getSpaceManager().getPersonalSpace(username);
 
-		if (null != user) {
-			String username = user.getName();
-			log.info("Fallback to personal space, using the personal space of '"
-					+ username + "' for publishing");
-			space = getSpaceManager().getPersonalSpace(username);
-
-			if (null != space) {
-				log.info("Using personal space of user '" + username + "'");
-				return space;
-			}
+		if (null != space) {
+			log.info("Using personal space of user '" + username + "'");
+			return space;
 		}
 
-		throw new ConverterException(
+		throw new MailToBlogPostException(
 				"None of the potential space key candidates were available nor could the personal space of the sender be identified");
 	}
 
@@ -278,9 +307,13 @@ public class MailToBlogPostPublisher {
 	 * Confluence user account. First successful mapping result will be
 	 * returned.
 	 * 
+	 * @throws MailToBlogPostException
+	 *             if user could not be mapped to local/internal user directory
+	 *             of Confluence
 	 * @return
 	 */
-	public User mapSenderOfMessageToLocalUser(List<String> senders) {
+	public User mapSenderOfMessageToLocalUser(List<String> senders)
+			throws MailToBlogPostException {
 		User r = null;
 
 		for (String sender : senders) {
@@ -291,11 +324,12 @@ public class MailToBlogPostPublisher {
 			}
 		}
 
-		if (null != r) {
-			log.debug("Sender of mail resolved to " + r.getFullName());
-		} else {
-			log.error("Could not resolve sender of E-mail");
+		if (null == r) {
+			throw new MailToBlogPostException(
+					"Failed to map sender of e--mail to local username");
 		}
+
+		log.debug("Sender of mail resolved to " + r.getFullName());
 
 		return r;
 	}
@@ -400,5 +434,13 @@ public class MailToBlogPostPublisher {
 
 	public void setAttachmentManager(AttachmentManager attachmentManager) {
 		this.attachmentManager = attachmentManager;
+	}
+
+	public PermissionManager getPermissionManager() {
+		return permissionManager;
+	}
+
+	public void setPermissionManager(PermissionManager permissionManager) {
+		this.permissionManager = permissionManager;
 	}
 }

@@ -10,11 +10,11 @@ import javax.mail.MessagingException;
 
 import org.apache.log4j.Logger;
 
-import com.midori.confluence.plugin.mail2news.MailUtil;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessor;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessorException;
 import com.midori.confluence.plugin.mail2news.protocol.imap.ImapProtocolHandler.FolderType;
 import com.midori.confluence.plugin.mail2news.protocol.imap.ImapProtocolHandler.ImapRootFolderStructure;
+import com.midori.confluence.plugin.mail2news.util.MailUtil;
 
 public class ImapMessageProcessor implements MessageProcessor {
 	protected final Logger log = Logger.getLogger(ImapMessageProcessor.class);

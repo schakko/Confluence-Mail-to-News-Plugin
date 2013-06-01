@@ -39,7 +39,7 @@
  * @package  com.midori.confluence.plugin.mail2news.mail2news
  */
 
-package com.midori.confluence.plugin.mail2news;
+package com.midori.confluence.plugin.mail2news.job;
 
 import javax.mail.Message;
 
@@ -49,8 +49,10 @@ import org.quartz.JobExecutionException;
 
 import com.atlassian.confluence.plugins.sharepage.api.SharePageService;
 import com.atlassian.quartz.jobs.AbstractJob;
-import com.atlassian.sal.api.component.ComponentLocator;
 import com.atlassian.spring.container.ContainerManager;
+import com.midori.confluence.plugin.mail2news.MailToBlogPostPublisher;
+import com.midori.confluence.plugin.mail2news.config.ConfigurationManager;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessor;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandler;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandlerFactory;

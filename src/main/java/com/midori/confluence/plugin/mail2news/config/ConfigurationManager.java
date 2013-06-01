@@ -36,7 +36,7 @@
  * @package  com.midori.confluence.plugin.mail2news.mail2news
  */
 
-package com.midori.confluence.plugin.mail2news;
+package com.midori.confluence.plugin.mail2news.config;
 
 import org.apache.log4j.Logger;
 

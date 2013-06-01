@@ -136,13 +136,13 @@ public class MessageDataExtractor {
 		List<Address> allRecipients = new ArrayList<Address>();
 
 		try {
-			RecipientType[] types = new RecipientType[] { RecipientType.TO, RecipientType.CC };
+			RecipientType[] types = new RecipientType[] { RecipientType.TO,
+					RecipientType.CC };
 			Address[] recipients = null;
-			
-			for (RecipientType type : types)
-			{
+
+			for (RecipientType type : types) {
 				recipients = message.getRecipients(type);
-				
+
 				if (null != recipients) {
 					Collections.addAll(allRecipients, recipients);
 				}
@@ -232,8 +232,8 @@ public class MessageDataExtractor {
 
 			}
 		} catch (Exception e) {
-			log.error("Unable to extract header " + SHARE_WITH_HEADER
-					+ " from mail: " + e.getMessage());
+			log.info("No header " + SHARE_WITH_HEADER
+					+ " defined; not sharing e-mail with anyone");
 		}
 
 		if (null != sbHeader) {
@@ -262,16 +262,36 @@ public class MessageDataExtractor {
 		if (getSpaceKeyAndTitleFromSubject().containsKey(usedSpaceKey)) {
 			return getSpaceKeyAndTitleFromSubject().get(usedSpaceKey);
 		}
-		
+
 		String subject = "";
-		
+
 		try {
 			subject = message.getSubject();
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			log.error("Failed to get subject from message: " + e.getMessage());
 		}
-		
+
 		return subject;
+	}
+
+	/**
+	 * Replaces all linebreaks with <br />
+	 * and converts URLs to clickable links. Other HTML code is not removed.
+	 * 
+	 * @return
+	 */
+	public String getBodyInStorageFormat() {
+		// non-null
+		String text = getContent().getText();
+
+		// replace line breaks
+		text = text.replaceAll("\r\n", "<br />");
+
+		// Replace URLs with links; fixed version from
+		// http://stackoverflow.com/questions/1909534/java-replacing-text-url-with-clickable-html-link
+		text = text.replaceAll("(\\w+://[^\\s^<^>]*)",
+				"<a href=\"$1\">$1</a>");
+
+		return text;
 	}
 }

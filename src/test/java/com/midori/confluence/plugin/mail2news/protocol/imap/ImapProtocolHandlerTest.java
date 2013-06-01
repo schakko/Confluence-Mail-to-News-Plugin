@@ -10,7 +10,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.GreenMailUtil;
-import com.midori.confluence.plugin.mail2news.MailConfiguration;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandler;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandlerFactory;
 

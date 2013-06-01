@@ -37,7 +37,7 @@
  * @package  com.midori.confluence.plugin.mail2news.mail2news.actions
  */
 
-package com.midori.confluence.plugin.mail2news.actions;
+package com.midori.confluence.plugin.mail2news.action;
 
 import java.util.Hashtable;
 import java.util.Map;
@@ -52,8 +52,8 @@ import org.apache.log4j.Logger;
 
 
 import com.atlassian.confluence.core.ConfluenceActionSupport;
-import com.midori.confluence.plugin.mail2news.ConfigurationManager;
-import com.midori.confluence.plugin.mail2news.MailConfiguration;
+import com.midori.confluence.plugin.mail2news.config.ConfigurationManager;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 
 public class ConfigurationAction extends ConfluenceActionSupport {
 

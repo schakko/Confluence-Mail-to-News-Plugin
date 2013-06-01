@@ -1,4 +1,4 @@
-package com.midori.confluence.plugin.mail2news;
+package com.midori.confluence.plugin.mail2news.util;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -33,7 +33,7 @@ import com.atlassian.confluence.plugins.sharepage.api.SharePageService;
  * @author ckl
  * 
  */
-class MockHttpServletRequest extends HttpServletRequestWrapper {
+public class MockHttpServletRequest extends HttpServletRequestWrapper {
 	public MockHttpServletRequest() {
 		super(new HttpServletRequest() {
 			public void setCharacterEncoding(String arg0)

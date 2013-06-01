@@ -9,7 +9,7 @@ import javax.mail.MessagingException;
 
 import org.apache.log4j.Logger;
 
-import com.midori.confluence.plugin.mail2news.MailConfiguration;
+import com.midori.confluence.plugin.mail2news.config.MailConfiguration;
 import com.midori.confluence.plugin.mail2news.message.MessageProcessor;
 import com.midori.confluence.plugin.mail2news.protocol.AbstractProtocolHandler;
 import com.midori.confluence.plugin.mail2news.protocol.ProtocolHandler;
@@ -112,7 +112,7 @@ public class ImapProtocolHandler extends AbstractProtocolHandler implements
 			String folderName = folderType.toString();
 			Folder folderReference = null;
 
-			log.error("Initializing folder [" + folderName + "]");
+			log.info("Initializing folder [" + folderName + "]");
 
 			try {
 				folderReference = store.getFolder(folderName);

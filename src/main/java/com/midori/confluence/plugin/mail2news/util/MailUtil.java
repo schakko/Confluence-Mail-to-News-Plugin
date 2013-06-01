@@ -1,4 +1,4 @@
-package com.midori.confluence.plugin.mail2news;
+package com.midori.confluence.plugin.mail2news.util;
 
 import java.nio.charset.Charset;
 import java.util.Properties;
@@ -88,7 +88,6 @@ public class MailUtil {
 								// email sending facilities in confluence
 								// instead of this low level approach
 	{
-		/* get the SMTP mail server */
 		SMTPMailServer smtpMailServer = MailFactory.getServerManager()
 				.getDefaultSMTPMailServer();
 		if (smtpMailServer == null) {

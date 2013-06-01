@@ -42,4 +42,4 @@ This use case might be very specific to our environment.
 - For testing purposes I use Apache James 3.0 beta. Create a new domain (*./james-cli.sh adddomain "localhost"*) and create three accounts (*./james-cli.sh adduser "wiki@localhost" wiki && ./james-cli.sh adduser "test@localhost" test && ./james-cli.sh adduser "admin@localhost" admin*). Send an e-mail from user admin@localhost account. Currently I am doing this by hand with thunderbird.
  
 ## Contact
-If you have further questions don't hesitate to write my: confluence-mail2new@schakko.de / http://twitter.com/schakko
+If you have further questions don't hesitate to write me: confluence-mail2new@schakko.de / http://twitter.com/schakko
